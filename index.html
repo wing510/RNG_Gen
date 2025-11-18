@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>0000-9999 號碼產生工具（Roll + 分散 + 倍數）</title>
+  <style>
+    body {
+      font-family: Arial, "Microsoft JhengHei", sans-serif;
+      margin: 20px;
+      background: #f7f7f7;
+    }
+    .container {
+      max-width: 820px;
+      margin: 0 auto;
+      background: #fff;
+      padding: 20px 25px 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h1 {
+      text-align: center;
+      font-size: 1.4rem;
+      margin-bottom: 20px;
+    }
+    fieldset {
+      margin-bottom: 18px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      padding: 12px 16px;
+      position: relative;
+    }
+    legend {
+      padding: 0 6px;
+      font-weight: bold;
+      font-size: 0.95rem;
+    }
+    label {
+      display: inline-block;
+      margin: 6px 0;
+    }
+    input[type="number"] {
+      padding: 4px 6px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      margin-left: 4px;
+      width: 90px;
+    }
+    input[type="file"] {
+      margin-top: 6px;
+    }
+    button {
+      padding: 8px 16px;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      font-size: 0.95rem;
+      margin-right: 8px;
+    }
+    .btn-primary {
+      background-color: #007bff;
+      color: #fff;
+    }
+    .btn-secondary {
+      background-color: #28a745;
+      color: #fff;
+    }
+    .note {
+      font-size: 0.85rem;
+      color: #666;
+      margin-top: 4px;
+      white-space: pre-line;
+    }
+    #status {
+      margin-top: 8px;
+      font-size: 0.9rem;
+      white-space: pre-line;
+    }
+    .status-ok { color: #007b00; }
+    .status-warn { color: #c77f00; }
+    .status-error { color: #c00000; }
+
+    /* 說明收合按鈕 & 隱藏樣式 */
+    .toggle-btn {
+      cursor: pointer;
+      font-size: 0.8rem;
+      color: #007bff;
+      position: absolute;
+      top: 6px;
+      right: 10px;
+      user-select: none;
+    }
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>0000-9999 號碼產生工具（Roll + 分散 + 倍數）</h1>
+
+    <!-- 步驟 1：上傳四位數紅字 txt 檔 -->
+    <fieldset>
+      <legend>步驟 1：上傳四位數紅字（txt 檔）</legend>
+      <span class="toggle-btn" onclick="toggleNote('note1', this)">顯示說明</span>
+
+      <input type="file" id="redFile" accept=".txt" />
+      <br />
+      <label>
+        紅字大萬(Big)：<input type="number" id="redBigAmount" value="2" step="1" />
+      </label>
+      <br />
+      <label>
+        紅字小萬(Small)：<input type="number" id="redSmallAmount" value="4" step="1" />
+      </label>
+
+      <div id="note1" class="note hidden">
+上傳格式示例（txt 檔，可以換行或空白分隔）：
+0003
+0018
+1234
+5678
+
+紅字大萬 / 小萬：只套用在「紅字那一份檔案」，與其他號碼分開計算。
+      </div>
+
+      <div id="redSummary" class="note"></div>
+    </fieldset>
+
+    <!-- 步驟 2：設定其他號碼的大萬 / 小萬 -->
+    <fieldset>
+      <legend>步驟 2：設定「其他號碼」的大萬 / 小萬</legend>
+      <span class="toggle-btn" onclick="toggleNote('note2', this)">顯示說明</span>
+      <label>
+        大萬(Big)：<input type="number" id="bigAmount" value="2" step="1" />
+      </label>
+      <br />
+      <label>
+        小萬(Small)：<input type="number" id="smallAmount" value="4" step="1" />
+      </label>
+      <div id="note2" class="note hidden">
+說明：
+1. 只對「非紅字」的號碼套用。
+2. 例：大萬=2，小萬=4 時，一般號碼會是：0000 2 4
+3. 目前分散與倍數控制預設只支援 Big / Small 為整數。
+      </div>
+    </fieldset>
+
+    <!-- 步驟 3：設定 Roll 比例（以家族為母數） -->
+    <fieldset>
+      <legend>步驟 3：設定 Roll 比例（%）</legend>
+      <span class="toggle-btn" onclick="toggleNote('note3', this)">顯示說明</span>
+      <label>
+        Roll 比例：<input type="number" id="rollRatio" value="0" min="0" max="100" />
+      </label>
+      <div id="note3" class="note hidden">
+Roll 選號規則（以「家族」為母數）：
+1. 先把 0000-9999（扣紅字）依「數字組合」分家族，例如：
+   0015 / 0105 / 1500 / 5001... -> 同一家族。
+2. 一個家族可以成 r 的條件：
+   - 家族內「全部」成員都不是紅字（只要有一個是紅字，整個家族被封印，不能成 r）。
+   - 這組數字本身包含「至少 2 種不同的數字」。
+     ✔ 可成 r 的例子家族：0015, 0058, 1200, 1337, 1234, 9994, 0011
+     ✘ 不可成 r 的例子家族：0000, 1111, 2222（四碼完全相同）
+   - 若紅字有 0018，則 0018 的所有排列（0018,0081,0108,0180,...,8100）
+     這個家族「不得被選成 r」，但只有實際上傳的 0018 算紅字會被扣掉。
+3. Roll 比例 = 以「可成 r 的家族數量」為母數，例如：
+   - 可成 r 的家族有 500 組，Roll=10% -> 目標 50 組家族成 r。
+4. 每一個被選中的家族：只會「隨機選 1 個號碼」當 r 基底（例：0015r），
+   這個家族其他號碼（0015,0051,0105,...）全部不再以一般號碼出現。
+      </div>
+    </fieldset>
+
+    <!-- 步驟 4：設定分散比例 -->
+    <fieldset>
+      <legend>步驟 4：設定分散比例（%）</legend>
+      <span class="toggle-btn" onclick="toggleNote('note4', this)">顯示說明</span>
+      <label>
+        分散比例：<input type="number" id="spreadRatio" value="0" min="0" max="100" />
+      </label>
+      <div id="note4" class="note hidden">
+分散的對象：
+- 一般號碼：可以分散。
+- r 號碼（例如 0015r）：也可以分散。
+
+邏輯：
+1. 先根據分散比例，從所有行（一般 + r）中，隨機挑出「要分散的行」。
+2. 被選中的行會被拆成多行，拆完的 Big / Small 總和不變。
+3. 每一個拆分後的行，都會檢查 Big / Small 是否同時為 0：
+   - 若出現 0 大 0 小，會重新亂數切割或調整，盡量避免 0 0 行。
+4. 沒被選中分散，就維持一行：5558 2 4。
+      </div>
+    </fieldset>
+
+    <!-- 步驟 5：設定行數倍數 -->
+    <fieldset>
+      <legend>步驟 5：設定行數倍數</legend>
+      <span class="toggle-btn" onclick="toggleNote('note5', this)">顯示說明</span>
+      <label>
+        行數倍數：<input type="number" id="lineMultiplier" value="1.0" step="0.1" min="1" />
+      </label>
+      <div id="note5" class="note hidden">
+說明：
+1. 先計算「基礎行數」 = Roll 完成後，還沒分散前的行數（不含紅字）。
+2. 行數倍數 = 1.4 -> 目標行數 ≈ 基礎行數 × 1.4。
+3. 分散比例決定「哪些行要分散」；倍數會決定「每一個被分散的行拆成幾行」，
+   讓總行數盡量接近這個倍數。
+4. 若倍數太小，無法低於「基礎行數 + 被分散行數」，系統會以該最小值為準。
+      </div>
+    </fieldset>
+
+    <!-- 產生分析 & 下載 txt -->
+    <fieldset>
+      <legend>產生分析 &amp; 下載 txt</legend>
+      <button class="btn-primary" id="analyzeBtn">產生分析</button>
+      <button class="btn-secondary" id="downloadBtn">下載 txt 檔</button>
+      <div id="status"></div>
+    </fieldset>
+  </div>
+
+  <script>
+    // 切換說明顯示 / 隱藏
+    function toggleNote(id, btnEl) {
+      const note = document.getElementById(id);
+      if (!note) return;
+      if (note.classList.contains('hidden')) {
+        note.classList.remove('hidden');
+        btnEl.textContent = '隱藏說明';
+      } else {
+        note.classList.add('hidden');
+        btnEl.textContent = '顯示說明';
+      }
+    }
+
+    // 通用下載函式
+    function downloadTextFile(filename, content) {
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // 紅字集合（只存上傳的實際紅字）
+    let redSet = new Set();
+    // 由紅字衍生出來「禁止成為 r 基底」的排列家族成員（但不是紅字）
+    let redRForbiddenSet = new Set();
+
+    // 上一次分析結果（用來 Download）
+    let lastRedContent = '';
+    let lastOtherContent = '';
+    let lastStatsText = '';
+    let hasAnalysis = false;
+
+    const redFileInput = document.getElementById('redFile');
+    const redSummary = document.getElementById('redSummary');
+    const statusDiv = document.getElementById('status');
+
+    function setStatus(text, type = 'ok') {
+      statusDiv.textContent = text;
+      statusDiv.className = '';
+      if (type === 'ok') statusDiv.classList.add('status-ok');
+      else if (type === 'warn') statusDiv.classList.add('status-warn');
+      else if (type === 'error') statusDiv.classList.add('status-error');
+    }
+
+    // 產生 num 的所有排列（去重）
+    function getPermutations(numStr) {
+      const chars = numStr.split('');
+      const results = new Set();
+
+      function backtrack(path, used) {
+        if (path.length === chars.length) {
+          results.add(path.join(''));
+          return;
+        }
+        for (let i = 0; i < chars.length; i++) {
+          if (used[i]) continue;
+          used[i] = true;
+          path.push(chars[i]);
+          backtrack(path, used);
+          path.pop();
+          used[i] = false;
+        }
+      }
+
+      backtrack([], Array(chars.length).fill(false));
+      return Array.from(results);
+    }
+
+    // r 規則：至少 2 種不同的數字才可成 r（四碼全相同不可）
+    function canBeR(num) {
+      const uniqueDigits = new Set(num.split(''));
+      return uniqueDigits.size >= 2;
+    }
+
+    // 打亂陣列（Fisher–Yates）
+    function shuffle(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+    }
+
+    // 隨機把 sum 拆成 parts 個「非負整數」，總和仍為 sum
+    function randomPartition(sum, parts) {
+      if (sum <= 0) {
+        return Array(parts).fill(0);
+      }
+      const cuts = [];
+      for (let i = 0; i < parts - 1; i++) {
+        cuts.push(Math.floor(Math.random() * (sum + 1)));
+      }
+      cuts.sort((a, b) => a - b);
+      const result = [];
+      let prev = 0;
+      for (let i = 0; i < parts - 1; i++) {
+        result.push(cuts[i] - prev);
+        prev = cuts[i];
+      }
+      result.push(sum - prev);
+      return result;
+    }
+
+    // 嘗試產生一組分拆，避免出現 0 大 0 小 的行
+    function generateNonZeroZeroParts(totalBig, totalSmall, partsCount) {
+      let bigParts = [];
+      let smallParts = [];
+      let ok = false;
+
+      for (let attempt = 0; attempt < 20; attempt++) {
+        bigParts = randomPartition(totalBig, partsCount);
+        smallParts = randomPartition(totalSmall, partsCount);
+
+        ok = true;
+        for (let j = 0; j < partsCount; j++) {
+          if (bigParts[j] === 0 && smallParts[j] === 0) {
+            ok = false;
+            break;
+          }
+        }
+        if (ok) {
+          return { bigParts, smallParts };
+        }
+      }
+
+      // 若 20 次仍無法完全避免 0 0，做一次修正：從其他格借 1
+      for (let j = 0; j < partsCount; j++) {
+        if (bigParts[j] === 0 && smallParts[j] === 0) {
+          // 從其他格借 1（先借 big，若不行再借 small）
+          let borrowed = false;
+          for (let k = 0; k < partsCount; k++) {
+            if (k === j) continue;
+            if (bigParts[k] > 0) {
+              bigParts[k] -= 1;
+              bigParts[j] += 1;
+              borrowed = true;
+              break;
+            }
+          }
+          if (!borrowed) {
+            for (let k = 0; k < partsCount; k++) {
+              if (k === j) continue;
+              if (smallParts[k] > 0) {
+                smallParts[k] -= 1;
+                smallParts[j] += 1;
+                borrowed = true;
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      return { bigParts, smallParts };
+    }
+
+    // 讀取紅字 txt
+    redFileInput.addEventListener('change', function () {
+      const file = redFileInput.files[0];
+      redSet = new Set();
+      redRForbiddenSet = new Set();
+      redSummary.textContent = '';
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const text = e.target.result || '';
+        const tokens = text.split(/\s+/).map(t => t.trim()).filter(Boolean);
+
+        let totalTokens = 0;
+        let invalidTokens = [];
+
+        tokens.forEach(tok => {
+          totalTokens++;
+          if (/^\d{4}$/.test(tok)) {
+            redSet.add(tok);
+          } else {
+            invalidTokens.push(tok);
+          }
+        });
+
+        // 建立「不可成為 r 基底」的排列家族成員
+        redSet.forEach(rn => {
+          if (canBeR(rn)) {
+            const perms = getPermutations(rn);
+            perms.forEach(p => {
+              if (!redSet.has(p)) {
+                redRForbiddenSet.add(p);
+              }
+            });
+          }
+        });
+
+        let msg = `已讀取紅字（不重複）：${redSet.size} 組\n原始欄位數：${totalTokens}`;
+        if (invalidTokens.length > 0) {
+          msg += `\n有 ${invalidTokens.length} 個不是 4 位數，已忽略。`;
+        }
+        msg += `\n禁止成為 r 基底的排列家族成員數量：${redRForbiddenSet.size}`;
+        redSummary.textContent = msg;
+      };
+      reader.onerror = function () {
+        redSummary.textContent = '讀取檔案失敗，請再試一次。';
+      };
+      reader.readAsText(file, 'utf-8');
+    });
+
+    // 核心：產生分析（不下載）
+    function runAnalysis() {
+      const redBig = parseFloat(document.getElementById('redBigAmount').value || '0') || 0;
+      const redSmall = parseFloat(document.getElementById('redSmallAmount').value || '0') || 0;
+
+      const big = parseFloat(document.getElementById('bigAmount').value || '0') || 0;
+      const small = parseFloat(document.getElementById('smallAmount').value || '0') || 0;
+      let rollRatio = parseFloat(document.getElementById('rollRatio').value || '0') || 0;
+      let spreadRatio = parseFloat(document.getElementById('spreadRatio').value || '0') || 0;
+      let lineMultiplier = parseFloat(document.getElementById('lineMultiplier').value || '1') || 1;
+
+      if (rollRatio < 0) rollRatio = 0;
+      if (rollRatio > 100) rollRatio = 100;
+      if (spreadRatio < 0) spreadRatio = 0;
+      if (spreadRatio > 100) spreadRatio = 100;
+      if (lineMultiplier < 1) lineMultiplier = 1;
+
+      const bigIsInt = Number.isInteger(big);
+      const smallIsInt = Number.isInteger(small);
+
+      if (!redFileInput.files[0]) {
+        if (!confirm('尚未上傳紅字檔，確定要直接產生 0000-9999 全部號碼？')) {
+          setStatus('已取消產生分析。', 'warn');
+          return;
+        }
+      }
+
+      // 1. 建立「非紅字號碼列表」與「家族 map」
+      const nonRedNumbers = [];
+      const familyMap = {}; // key(排序後數字) -> { members: [...] }
+
+      for (let i = 0; i < 10000; i++) {
+        const num = i.toString().padStart(4, '0');
+        if (redSet.has(num)) continue; // 紅字完全扣除
+
+        nonRedNumbers.push(num);
+
+        const key = num.split('').sort().join('');
+        if (!familyMap[key]) {
+          familyMap[key] = { members: [] };
+        }
+        familyMap[key].members.push(num);
+      }
+
+      // 2. 找出「可成 r 的家族」（純白家族 + unique digits >= 2 + 不在封印名單）
+      const candidateFamilies = []; // { key, members }
+      for (const key in familyMap) {
+        const members = familyMap[key].members;
+        if (!members || members.length === 0) continue;
+
+        const sample = members[0]; // 任取一個代表
+
+        if (!canBeR(sample)) continue;
+        if (redRForbiddenSet.has(sample)) continue;
+
+        candidateFamilies.push({ key, members });
+      }
+
+      // 3. 依 Roll 比例，以「家族數量」為母數抽 r 家族
+      let chosenFamilyKeys = new Set();
+      if (rollRatio > 0 && candidateFamilies.length > 0) {
+        shuffle(candidateFamilies);
+        const totalFamilies = candidateFamilies.length;
+        const targetFamilies = Math.floor(totalFamilies * (rollRatio / 100));
+
+        const chosen = candidateFamilies.slice(0, targetFamilies);
+        chosen.forEach(f => chosenFamilyKeys.add(f.key));
+      }
+
+      // 4. 為每個被選中的家族決定 r 基底（從家族成員隨機選一個）
+      const baselineMap = {}; // key -> baseline num
+      candidateFamilies.forEach(f => {
+        if (!chosenFamilyKeys.has(f.key)) return;
+        const members = f.members;
+        const rndIndex = Math.floor(Math.random() * members.length);
+        baselineMap[f.key] = members[rndIndex];
+      });
+
+      // 5. 組出「基礎 entries」：Roll 完成後、尚未分散的行（不含紅字）
+      // 每個 entry: { num: '0000' 或 '0000r', isR: bool, big, small }
+      const entries = [];
+      nonRedNumbers.forEach(num => {
+        const key = num.split('').sort().join('');
+
+        if (chosenFamilyKeys.has(key)) {
+          // 這個家族是 r 家族，只輸出 baseline
+          if (baselineMap[key] === num) {
+            entries.push({ num: num + 'r', isR: true, big, small });
+          }
+          // 其他成員不輸出
+        } else {
+          // 一般號碼
+          entries.push({ num, isR: false, big, small });
+        }
+      });
+
+      const baseLines = entries.length; // 基礎行數（不含紅字）
+
+      // 準備紅字輸出內容（獨立檔案）
+      let redLinesText = [];
+      let redLinesCount = 0;
+      if (redSet.size > 0) {
+        const sortedReds = Array.from(redSet).sort();
+        redLinesText = sortedReds.map(num => `${num} ${redBig} ${redSmall}`);
+        redLinesCount = redLinesText.length;
+      }
+
+      // 若 Big / Small 不是整數，分散 & 倍數控制停用，直接輸出基礎行
+      if (!bigIsInt || !smallIsInt) {
+        const linesText = entries.map(e => `${e.num} ${e.big} ${e.small}`);
+
+        lastRedContent = redLinesText.join('\n');
+        lastOtherContent = linesText.join('\n');
+        hasAnalysis = true;
+
+        let msg =
+          `Big / Small 不是整數，分散與倍數控制未啟用。\n` +
+          `紅字行數：${redLinesCount} 行（檔名：red_numbers.txt）\n` +
+          `其他基礎行數（Roll 後未分散）：${baseLines} 行。\n` +
+          `其他檔案檔名：other_numbers.txt\n\n` +
+          `分析已完成，如要下載請按「下載 txt 檔」。`;
+        lastStatsText = msg;
+        setStatus(msg, 'warn');
+        return;
+      }
+
+      // 6. 根據分散比例，選出要分散的行（包含一般與 r）
+      const eligibleIndices = [];
+      for (let i = 0; i < entries.length; i++) {
+        eligibleIndices.push(i);
+      }
+
+      let spreadCount = 0;
+      let selectedSpreadIndices = [];
+      if (spreadRatio > 0 && eligibleIndices.length > 0) {
+        shuffle(eligibleIndices);
+        spreadCount = Math.floor(eligibleIndices.length * (spreadRatio / 100));
+        selectedSpreadIndices = eligibleIndices.slice(0, spreadCount);
+      }
+
+      // 7. 依「行數倍數」決定每個被分散的行要拆幾行
+      let targetLinesRaw = Math.round(baseLines * lineMultiplier);
+      const minLines = baseLines + spreadCount; // 每個被分散行至少拆成 2 行
+
+      if (targetLinesRaw < minLines) {
+        targetLinesRaw = minLines;
+      }
+
+      const additionalNeeded = targetLinesRaw - baseLines; // 理論上要多出的行數
+
+      // parts[i] = 該 entry 要拆成幾行；預設 1 行
+      const parts = new Array(entries.length).fill(1);
+
+      // 先全部被分散的行設為 2 行（每行多 1 行）
+      let currentExtra = 0;
+      selectedSpreadIndices.forEach(idx => {
+        parts[idx] = 2;
+        currentExtra += 1;
+      });
+
+      let remainingExtra = additionalNeeded - currentExtra;
+      if (remainingExtra < 0) remainingExtra = 0;
+
+      // 若還需要更多行，就在被分散的行上隨機加行數
+      const spreadN = selectedSpreadIndices.length;
+      while (remainingExtra > 0 && spreadN > 0) {
+        const idx = selectedSpreadIndices[Math.floor(Math.random() * spreadN)];
+        parts[idx] += 1;
+        remainingExtra -= 1;
+      }
+
+      // 8. 根據 parts[] 實際輸出：拆 Big / Small，並盡量避免 0 0 行
+      const linesText = [];
+      let zeroZeroLines = 0;
+
+      for (let i = 0; i < entries.length; i++) {
+        const entry = entries[i];
+        const p = parts[i];
+
+        if (p === 1) {
+          // 不分散
+          if (entry.big === 0 && entry.small === 0) {
+            zeroZeroLines++;
+          }
+          linesText.push(`${entry.num} ${entry.big} ${entry.small}`);
+        } else {
+          const { bigParts, smallParts } = generateNonZeroZeroParts(entry.big, entry.small, p);
+          for (let j = 0; j < p; j++) {
+            const bVal = bigParts[j];
+            const sVal = smallParts[j];
+            if (bVal === 0 && sVal === 0) {
+              // 理論上已經盡量避免，這裡只是雙保險
+              zeroZeroLines++;
+            }
+            linesText.push(`${entry.num} ${bVal} ${sVal}`);
+          }
+        }
+      }
+
+      const finalLines = linesText.length;
+
+      lastRedContent = redLinesText.join('\n');
+      lastOtherContent = linesText.join('\n');
+      hasAnalysis = true;
+
+      let msg =
+        `分析已完成（尚未下載檔案）。\n` +
+        `紅字行數：${redLinesCount} 行（檔名：red_numbers.txt）\n` +
+        `其他基礎行數（Roll 後未分散）：${baseLines}\n` +
+        `被選中分散的行數：${spreadCount}\n` +
+        `設定行數倍數：${lineMultiplier}\n` +
+        `實際輸出行數（含分散後）：${finalLines}\n` +
+        `偵測到 Big=0 且 Small=0 的行數（理論上接近 0）：${zeroZeroLines}\n` +
+        `其他檔案檔名：other_numbers.txt\n\n` +
+        `若不滿意，可再按一次「產生分析」重新亂數。\n` +
+        `確定可以後，再按「下載 txt 檔」下載目前這一版結果。`;
+
+      lastStatsText = msg;
+      setStatus(msg, 'ok');
+    }
+
+    document.getElementById('analyzeBtn').addEventListener('click', function () {
+      runAnalysis();
+    });
+
+    document.getElementById('downloadBtn').addEventListener('click', function () {
+      if (!hasAnalysis) {
+        setStatus('尚未產生分析，請先按「產生分析」。', 'warn');
+        return;
+      }
+
+      if (lastRedContent && lastRedContent.trim().length > 0) {
+        downloadTextFile('red_numbers.txt', lastRedContent);
+      }
+      if (lastOtherContent && lastOtherContent.trim().length > 0) {
+        downloadTextFile('other_numbers.txt', lastOtherContent);
+      }
+
+      setStatus(lastStatsText + '\n已下載 red_numbers.txt 與 other_numbers.txt（若有紅字）。', 'ok');
+    });
+  </script>
+</body>
+</html>
